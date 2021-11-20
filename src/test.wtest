@@ -1,0 +1,188 @@
+import example.*
+import wollok.game.*
+
+describe "Parcial Asadito" {
+
+	var personaQuePide
+	var personaQueDa
+
+	method initialize() {
+		personaQuePide = osky
+		personaQueDa = moni
+	}
+
+	method comidaPesada() = new Comida(calorias = 600, esCarne = false)
+
+	method comidaNoPesada() = self.noCarneDietetica()
+
+	method carneNoDietetica() = new Comida(calorias = 600, esCarne = true)
+
+	method noCarneDietetica() = new Comida(calorias = 100, esCarne = false)
+
+	method setCaloriasDietetico() {
+		dietetico.limiteDeCalorias(500)
+	}
+
+	test "si le piden a una persona que le pase un elemento y no lo tiene, la operación no puede realizarse" {
+		assert.throwsException{ personaQueDa.darElemento("sal", personaQueDa)}
+	}
+
+	test "Si le piden a un sordo que le pase un elemento le pasa el primero que encuentra - caso 1: el elemento es el primero" {
+		personaQueDa.criterioParaDarElemento(sordo)
+		personaQueDa.agregarElementos([ "sal", "aceite" ])
+		assert.notThat(personaQuePide.tieneElemento("sal"))
+		assert.that(personaQueDa.tieneElemento("sal"))
+		personaQueDa.darElemento("sal", personaQuePide)
+		assert.that(personaQuePide.tieneElemento("sal"))
+		assert.notThat(personaQueDa.tieneElemento("sal"))
+	}
+
+	test "Si le piden a un sordo que le pase un elemento le pasa el primero que encuentra - caso 2: el elemento no es el primero" {
+		personaQueDa.criterioParaDarElemento(sordo)
+		personaQueDa.agregarElementos([ "pan", "sal", "aceite" ])
+		personaQueDa.darElemento("sal", personaQuePide)
+		assert.equals([ "pan" ], personaQuePide.elementosCercanos())
+		assert.equals([ "sal", "aceite" ], personaQueDa.elementosCercanos())
+	}
+
+	test "Si le piden al irritable entonces le pasa todo" {
+		personaQueDa.criterioParaDarElemento(irritable)
+		personaQueDa.agregarElementos([ "pan", "sal", "aceite" ])
+		personaQueDa.darElemento("sal", personaQuePide)
+		assert.equals([ "pan", "sal", "aceite" ], personaQuePide.elementosCercanos())
+		assert.equals([], personaQueDa.elementosCercanos())
+	}
+
+	test "Si le piden al movedizo, debe cambiar de posición" {
+		personaQueDa.criterioParaDarElemento(movedizo)
+		personaQueDa.agregarElementos([ "pan", "sal", "aceite" ])
+		personaQueDa.posicion(game.at(0, 0))
+		personaQuePide.posicion(game.at(1, 1))
+		personaQueDa.darElemento("sal", personaQuePide)
+		assert.equals(game.at(0, 0), personaQuePide.posicion())
+		assert.equals(game.at(1, 1), personaQueDa.posicion())
+	}
+
+	test "si le piden al obediente, le debe pasar ese elemento" {
+		// Arrange
+		personaQueDa.criterioParaDarElemento(obediente)
+		personaQueDa.agregarElementos([ "pan", "sal", "aceite" ])
+		// Act
+		personaQueDa.darElemento("sal", personaQuePide)
+		// Assert
+		assert.equals([ "sal" ], personaQuePide.elementosCercanos())
+		assert.equals([ "pan", "aceite" ], personaQueDa.elementosCercanos())
+	}
+
+	test "Dado un criterio vegetariano, si le ofrecen carne entonces no la acepta" {
+		const pechitoDeCerdo = self.carneNoDietetica()
+		assert.notThat(vegetariano.acepta(pechitoDeCerdo))
+	}
+
+	test "Dado un criterio vegetariano, si le ofrecen algo que no es carne entonces la acepta" {
+		const ensalada = self.noCarneDietetica()
+		assert.that(vegetariano.acepta(ensalada))
+	}
+
+	test "Dado un criterio dietético, si le ofrecen una comida por debajo del límite entonces la acepta " {
+		self.setCaloriasDietetico()
+		const comidaDietetica = self.noCarneDietetica()
+		assert.that(dietetico.acepta(comidaDietetica))
+	}
+
+	test "Dado un criterio dietético, si le ofrecen una comida por encima del límite entonces no la acepta " {
+		self.setCaloriasDietetico()
+		const comidaNoDietetica = self.carneNoDietetica()
+		assert.notThat(dietetico.acepta(comidaNoDietetica))
+	}
+
+	test "Dado un criterio alternado, si le ofrecen una comida por segunda vez entonces la acepta" {
+		const alternado = new Alternado()
+		const comidaNoDietetica = self.carneNoDietetica()
+		assert.notThat(alternado.acepta(comidaNoDietetica))
+		assert.that(alternado.acepta(comidaNoDietetica))
+	}
+
+	test "dado un criterio combinado, si le ofrecen una comida, debe aceptarla si cumple todos los criterios" {
+		self.setCaloriasDietetico()
+		const combinado = new AceptacionCombinada()
+		const comida = self.noCarneDietetica()
+		combinado.agregarCriterios([ dietetico, vegetariano ])
+		assert.that(combinado.acepta(comida))
+	}
+
+	test "Dada una persona con un criterio, si le ofrecen la comida que cumple con el mismo, entonces la come" {
+		personaQueDa.criterioDeComida(dietetico)
+		self.setCaloriasDietetico()
+		const comidaDietetica = self.noCarneDietetica()
+		personaQueDa.comer(comidaDietetica)
+		assert.equals([ comidaDietetica ], personaQueDa.comidas())
+	}
+
+	test "Dada una persona con un criterio, si le ofrecen la comida que no cumple con el mismo, entonces no la come" {
+		personaQueDa.criterioDeComida(dietetico)
+		self.setCaloriasDietetico()
+		const comidaNoDietetica = self.carneNoDietetica()
+		personaQueDa.comer(comidaNoDietetica)
+		assert.equals([], personaQueDa.comidas())
+	}
+
+	test "Si una persona comió una comida pesada, entonces está pipón" {
+		personaQueDa.criterioDeComida(vegetariano)
+		personaQueDa.comer(self.comidaPesada())
+		assert.that(personaQueDa.estaPipon())
+	}
+
+	test "Si una persona comió una comida no pesada, entonces no está pipón" {
+		personaQueDa.criterioDeComida(vegetariano)
+		personaQueDa.comer(self.comidaNoPesada())
+		assert.notThat(personaQueDa.estaPipon())
+	}
+
+	test "Si una persona no come algo, entonces no la pasa bien" {
+		assert.notThat(osky.laPasaBien())
+	}
+
+	test "Osky siempre la pasa bien" {
+		osky.comer(new Comida())
+		assert.that(osky.laPasaBien())
+	}
+
+	test "Si Moni se sienta en su posición preferida, entonces la pasa bien" {
+		moni.comer(new Comida())
+		moni.posicion(game.at(1, 1))
+		moni.posicion(game.at(2, 2))
+		assert.that(moni.laPasaBien())
+	}
+
+	test "Si Moni no se sienta en su posición preferida, entonces no la pasa bien" {
+		moni.comer(new Comida())
+		moni.posicion(game.at(0, 1))
+		moni.posicion(game.at(2, 2))
+		assert.notThat(moni.laPasaBien())
+	}
+
+	test "Si Facu comió carne, entonces la pasa bien" {
+		facu.criterioDeComida(dietetico)
+		facu.comer(new Comida(esCarne = true))
+		assert.that(facu.laPasaBien())
+	}
+
+	test "Si Facu no comió carne, entonces no la pasa bien" {
+		facu.criterioDeComida(dietetico)
+		facu.comer(new Comida(esCarne = false))
+		assert.notThat(facu.laPasaBien())
+	}
+
+	test "Si vero tiene pocas cosas cerca, entonces la pasa bien" {
+		vero.comer(new Comida())
+		vero.agregarElementos(["sal","vinagre","chimi"])
+		assert.that(vero.laPasaBien())
+	}
+	test "Si vero tiene muchas cosas cerca, entonces no la pasa bien" {
+		vero.comer(new Comida())
+		vero.agregarElementos(["sal","vinagre","chimi","salsa criolla"])
+		assert.notThat(vero.laPasaBien())
+	}
+}
+
